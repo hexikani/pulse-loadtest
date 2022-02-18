@@ -76,7 +76,7 @@ function main() {
 
 	async function checkAndTransfer() {
 		const balanceWei = await web3.eth.getBalance(address, 'latest');
-		/*try*/ {
+		try {
 			var gasPrice = await web3.eth.getGasPrice();
 			//console.log('Gas price:', web3.utils.fromWei(gasPrice, "gwei"), " Beats");
 			var bnGasLimit = new BN(gasPrice).mul(new BN(gas)).add(new BN(valueWei));
@@ -104,13 +104,13 @@ function main() {
 				}
 			}
 		}
-		//catch(err) {
-		//	log(`Transaction FAILED (balance: ${web3.utils.fromWei(balanceWei, "gwei")} Beats = ${web3.utils.fromWei(balanceWei, 'ether')} PLS) ${err}`);
-		//}
+		catch(err) {
+			log(`Transaction FAILED (balance: ${web3.utils.fromWei(balanceWei, "gwei")} Beats = ${web3.utils.fromWei(balanceWei, 'ether')} PLS) ${err}`);
+		}
 	}
 
 	function doLoop() {
-		checkAndTransfer().then(() => { setTimeout(doLoop, 100); });
+		checkAndTransfer().then(() => { setTimeout(doLoop, Math.random() * 1000); });
 	}
 
 	doLoop();
