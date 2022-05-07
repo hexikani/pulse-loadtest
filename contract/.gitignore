@@ -1,3 +1,6 @@
 /node_modules/
-/wallets/
+/cache/
+/artifacts/
+/.env
 /package-lock.json
+*.swp

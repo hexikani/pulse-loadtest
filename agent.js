@@ -7,19 +7,24 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const args = process.argv.slice(2);
 const ID = args[0];
 
-const rpcNodeURL = 'ws://localhost:3334';
+const rpcNodeURL = 'ws://0.0.0.0:8576';
 const walletDirPath = "wallets/";
 const walletFilePath = `wallets/${args[0]}.json`;
 const walletPassword = 'WouldNotGuess';
 
+const burnContractAddress = '0x3de5E2E7E7Dd0859aFD8878cB708d68629453888';
+const BurnContract = require('./contract/artifacts/contracts/BurnContract.sol/BurnContract.json');
+
 function main() {
-	function log(s) {
-		console.log(`${new Date().toUTCString()} {${ID}} ${s}`);
+	function log(...args) {
+		console.log(`${new Date().toUTCString()} {${ID}}`, ...args);
 	}
 
 	const web3 = new Web3(rpcNodeURL);
 	const filePathToWallet = {};
 	const gas = 21000;
+
+	const burnContract = new web3.eth.Contract(BurnContract.abi, burnContractAddress);
 
 	function readWallet(walletFilePath) {
 		if(walletFilePath in filePathToWallet) {
@@ -71,46 +76,75 @@ function main() {
 		log(` Transaction ${transaction.transactionHash} gas used ${receipt.gasUsed}`);
 	}
 
-	var lastTx = new Date();
-	var lastTxStarvingNotice = null;
+	let lastTx = new Date();
+	let lastTxStarvingNotice = null;
 
-	async function checkAndTransfer() {
-		const balanceWei = await web3.eth.getBalance(address, 'latest');
+	async function testTransfer(balanceWei) {
+		let gasPrice = await web3.eth.getGasPrice();
+		//console.log('Gas price:', web3.utils.fromWei(gasPrice, "gwei"), " Beats");
+		
+		let balance = web3.utils.fromWei(balanceWei, 'ether');
+		// round the 10% to avoid sending too small fractions, finally convert the value to string
+		let credit = "" + Math.floor(balance * 0.01 * 1e6) / 1e6;
+
+		let valueWei = web3.utils.toWei(credit, "ether");
+		let bnGasLimit = new BN(gasPrice).mul(new BN(gas)).add(new BN(valueWei));
+		//console.log("Credit:", web3.utils.fromWei(valueWei, "gwei"), "Beats", "Balance:", web3.utils.fromWei(balanceWei, "gwei"), "Beats");
+		//console.log('Gas * price + value:', web3.utils.fromWei(bnGasLimit, "gwei"), "Beats");
+
+		if(new BN(balanceWei).gte(bnGasLimit)) {
+			const randomWallet = getRandomWallet();
+			await transfer(credit, randomWallet.address, gasPrice, bnGasLimit);
+			lastTx = new Date();
+			return true;
+		}
+		return false;
+	}
+
+	async function testCallBurnContract(balanceWei) {
+		if(balanceWei < 40000000)
+			return false;
+
+		let gasPrice = await web3.eth.getGasPrice();
+		const random =  Math.trunc(Math.random() * 1000) + 1 + 300;
+		const transaction = await burnContract.methods.write("0", random).send({
+			from: address,
+			gasPrice: gasPrice * 2,
+			gas: '40000000', // PulseChain block limit
+		});
+		log(`BurnContract transaction submitted with ${random} writes`)
+		const receipt = await waitForTransaction(transaction.transactionHash);
+		log(`BurnContract transaction FINISHED, used gas: ${receipt.gasUsed}`)
+
+		lastTx = new Date();
+		return true;
+	}
+
+	async function doRandomTransaction() {
 		try {
-			var gasPrice = await web3.eth.getGasPrice();
-			//console.log('Gas price:', web3.utils.fromWei(gasPrice, "gwei"), " Beats");
-			var bnGasLimit = new BN(gasPrice).mul(new BN(gas)).add(new BN(valueWei));
-			
-			var balance = web3.utils.fromWei(balanceWei, 'ether');
-			// round the 10% to avoid sending too small fractions, finally convert the value to string
-			var credit = "" + Math.floor(balance * 0.01 * 1e6) / 1e6;
-
-			var valueWei = web3.utils.toWei(credit, "ether");
-			//console.log("Credit:", web3.utils.fromWei(valueWei, "gwei"), "Beats", "Balance:", web3.utils.fromWei(balanceWei, "gwei"), "Beats");
-			//console.log('Gas * price + value:', web3.utils.fromWei(bnGasLimit, "gwei"), "Beats");
-
-			if(new BN(balanceWei).gte(bnGasLimit)) {
-				const randomWallet = getRandomWallet();
-				await transfer(credit, randomWallet.address, gasPrice, bnGasLimit);
-				lastTx = new Date();
-			}
-			else {
-				const now = new Date();
-				if(now - lastTx > 10 * 1000) {
-					if(lastTxStarvingNotice == null || now - lastTxStarvingNotice > 60 * 1000) {
-						log(`Starving since ${lastTx.toUTCString()}`);
-						lastTxStarvingNotice = new Date();
-					}
-				}
-			}
+			const balanceWei = await web3.eth.getBalance(address, 'latest');
+			log("Current balance", web3.utils.fromWei(balanceWei, 'ether'), "tPLS");
+			if(Math.random() < 0.5)
+				await testTransfer(balanceWei);
+			else
+				await testCallBurnContract(balanceWei);
 		}
 		catch(err) {
-			log(`Transaction FAILED (balance: ${web3.utils.fromWei(balanceWei, "gwei")} Beats = ${web3.utils.fromWei(balanceWei, 'ether')} PLS) ${err}`);
+			const newBalanceWei = await web3.eth.getBalance(address, 'latest');
+			log(`Transaction FAILED (balance: ${web3.utils.fromWei(newBalanceWei, 'ether')} tPLS) ${err}`);
+		}
+
+		const now = new Date();
+		if(now - lastTx > 10 * 1000) {
+			if(lastTxStarvingNotice == null || now - lastTxStarvingNotice > 60 * 1000) {
+				log(`Starving since ${lastTx.toUTCString()}`);
+				lastTxStarvingNotice = new Date();
+			}
 		}
 	}
 
 	function doLoop() {
-		checkAndTransfer().then(() => { setTimeout(doLoop, Math.random() * 1000); });
+		doRandomTransaction().then(() => { setTimeout(doLoop, Math.random() * 1000); });
 	}
 
 	doLoop();

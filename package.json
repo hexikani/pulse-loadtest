@@ -1,0 +1,22 @@
+{
+  "name": "pulse-loadtest",
+  "version": "1.0.0",
+  "description": "This set of scripts emulates concurrent  send transactions between selected number of PulseChain accounts. Basic idea is to spin up numerous processes which perform send transactions in a loop, but only if the account ballance is sufficient.",
+  "main": "agent.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hexikani/pulse-loadtest.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hexikani/pulse-loadtest/issues"
+  },
+  "homepage": "https://github.com/hexikani/pulse-loadtest#readme",
+  "dependencies": {
+    "web3": "^1.7.3"
+  }
+}
