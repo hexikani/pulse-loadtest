@@ -110,12 +110,21 @@ async function main() {
 		if(balanceWei < 40000000)
 			return false;
 
-		let gasPrice = await web3.eth.getGasPrice();
-		const random =  Math.trunc(Math.random() * 1000) + 1 + 300;
-		const transaction = await burnContract.methods.write("0", random).send({
+		const random =  Math.trunc(Math.random() * 600) + 1 + 400;
+		const data = burnContract.methods.write("0", random).encodeABI();
+		const bnGasLimit = new BN(await web3.eth.estimateGas({
 			from: address,
-			gasPrice: gasPrice * 2,
-			gas: '40000000', // PulseChain block limit
+			to: burnContractAddress,
+			data: data,
+		}));
+		let gasPrice = await web3.eth.getGasPrice();
+		const transaction = await web3.eth.sendTransaction({
+			from: address,
+			to: burnContractAddress,
+			data: data,
+			gasPrice: gasPrice,
+			gas: bnGasLimit,
+			nonce: await web3.eth.getTransactionCount(address, "latest"),
 		});
 		log(`BurnContract transaction submitted with ${random} writes`)
 		const receipt = await waitForTransaction(transaction.transactionHash);
