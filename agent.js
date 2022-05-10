@@ -15,7 +15,7 @@ const walletPassword = 'WouldNotGuess';
 const burnContractAddress = '0x3de5E2E7E7Dd0859aFD8878cB708d68629453888';
 const BurnContract = require('./contract/artifacts/contracts/BurnContract.sol/BurnContract.json');
 
-function main() {
+async function main() {
 	function log(...args) {
 		console.log(`${new Date().toUTCString()} {${ID}}`, ...args);
 	}
@@ -88,12 +88,17 @@ function main() {
 		let credit = "" + Math.floor(balance * 0.01 * 1e6) / 1e6;
 
 		let valueWei = web3.utils.toWei(credit, "ether");
-		let bnGasLimit = new BN(gasPrice).mul(new BN(gas)).add(new BN(valueWei));
+		const randomWallet = getRandomWallet();
+		const bnGasLimit = new BN(await web3.eth.estimateGas({
+			from: address,
+			to: randomWallet.address,
+			amount: web3.utils.toWei(credit, "ether"),
+		}));
 		//console.log("Credit:", web3.utils.fromWei(valueWei, "gwei"), "Beats", "Balance:", web3.utils.fromWei(balanceWei, "gwei"), "Beats");
 		//console.log('Gas * price + value:', web3.utils.fromWei(bnGasLimit, "gwei"), "Beats");
 
+
 		if(new BN(balanceWei).gte(bnGasLimit)) {
-			const randomWallet = getRandomWallet();
 			await transfer(credit, randomWallet.address, gasPrice, bnGasLimit);
 			lastTx = new Date();
 			return true;
@@ -143,12 +148,11 @@ function main() {
 		}
 	}
 
-	function doLoop() {
-		doRandomTransaction().then(() => { setTimeout(doLoop, Math.random() * 1000); });
+	while(true) {
+		await doRandomTransaction();
+		await sleep(1000);
 	}
-
-	doLoop();
 }
 
-main();
+main().then(() => process.exit(0));
 
